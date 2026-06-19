@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Louise WHW">
+<meta name="theme-color" content="#0f1419">
+<meta name="format-detection" content="telephone=no">
+<title>Louise — West Highland Way Tracker</title>
+<style>
+  :root{
+    --bg:#0f1419; --card:#1a2129; --card2:#222c36; --line:#2d3a47;
+    --text:#e8edf2; --muted:#8a99a8; --accent:#4da3ff;
+    --green:#36c46b; --blue:#4da3ff; --amber:#f5b942; --red:#ff5d5d;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--text);line-height:1.4;
+       padding-bottom:calc(40px + env(safe-area-inset-bottom));
+       -webkit-tap-highlight-color:transparent}
+  header{padding:calc(16px + env(safe-area-inset-top)) 16px 8px;position:sticky;top:0;
+         background:var(--bg);z-index:5;border-bottom:1px solid var(--line)}
+  h1{font-size:18px;margin:0}
+  .sub{color:var(--muted);font-size:12px;margin-top:2px}
+  .wrap{padding:14px max(16px,env(safe-area-inset-left)) 14px max(16px,env(safe-area-inset-right));max-width:760px;margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+  input,select,.btn{-webkit-appearance:none;appearance:none}
+  input,select{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);
+        border-radius:9px;padding:11px;font-size:16px;outline:none;font-family:inherit}
+  input[type=time],input[type=datetime-local]{min-height:44px}
+  input:focus{border-color:var(--accent)}
+  .row{display:flex;gap:10px}
+  .row>div{flex:1}
+  .btn{background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:9px;
+       padding:9px 11px;font-size:13px;cursor:pointer}
+  .btn:active{background:#2c3947}
+  .btnbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chip{font-size:12px;padding:6px 9px}
+  .banner{border-radius:12px;padding:14px;margin-bottom:14px;font-weight:600;font-size:15px}
+  .b-green{background:rgba(54,196,107,.15);border:1px solid var(--green);color:#9bf0bd}
+  .b-blue{background:rgba(77,163,255,.15);border:1px solid var(--blue);color:#bcdcff}
+  .b-amber{background:rgba(245,185,66,.15);border:1px solid var(--amber);color:#f7d99a}
+  .b-red{background:rgba(255,93,93,.15);border:1px solid var(--red);color:#ffb3b3}
+  .stat{display:flex;justify-content:space-between;padding:5px 0;font-size:14px}
+  .stat .v{font-weight:600}
+  .big{font-size:26px;font-weight:700;letter-spacing:-.5px}
+  .next{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+  .dim{opacity:.45}
+  .done td{opacity:.4}
+  .cur td{background:rgba(77,163,255,.08)}
+  .pill{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700}
+  .p-green{background:var(--green);color:#06240f}
+  .p-blue{background:var(--blue);color:#04203f}
+  .p-amber{background:var(--amber);color:#3a2c00}
+  .p-red{background:var(--red);color:#3a0000}
+  details summary{cursor:pointer;color:var(--muted);font-size:13px;padding:4px 0}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏃‍♀️ Louise — West Highland Way</h1>
+  <div class="sub">95 miles · on-track & next-stop ETA estimator</div>
+</header>
+
+<div class="wrap">
+
+  <!-- INPUT -->
+  <div class="card">
+    <label>Where is she now? (mile point from the GPS update)</label>
+    <div class="row">
+      <div>
+        <input id="mile" type="number" inputmode="decimal" step="0.1" placeholder="e.g. 31.5">
+      </div>
+      <div style="flex:0 0 auto">
+        <button class="btn" onclick="setNow()">Time = now</button>
+      </div>
+    </div>
+    <div class="btnbar" id="cpButtons"></div>
+
+    <div style="margin-top:14px">
+      <label>Time of this update (24h clock)</label>
+      <input id="time" type="time">
+      <div class="hint">If she's reached this point on a later day, that's handled automatically.</div>
+    </div>
+
+    <details style="margin-top:12px">
+      <summary>Optional: recent pace (last update) & settings</summary>
+      <div style="margin-top:10px">
+        <label>Previous update — mile &amp; time (gives a fresher pace than start-average)</label>
+        <div class="row">
+          <div><input id="pmile" type="number" inputmode="decimal" step="0.1" placeholder="prev mile"></div>
+          <div><input id="ptime" type="time"></div>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label>Race start (date &amp; time)</label>
+        <input id="start" type="datetime-local">
+      </div>
+      <div style="margin-top:12px">
+        <label>Manual pace override (min/mile) — leave blank to auto-calc</label>
+        <input id="manual" type="number" inputmode="decimal" step="0.1" placeholder="e.g. 13.5">
+      </div>
+    </details>
+  </div>
+
+  <!-- STATUS BANNER -->
+  <div id="banner" class="banner b-blue">Enter her current mile point to begin.</div>
+
+  <!-- SUMMARY -->
+  <div class="card" id="summary" style="display:none">
+    <div class="next">Next stop</div>
+    <div class="big" id="nextName">—</div>
+    <div class="stat"><span>ETA at next stop</span><span class="v" id="nextEta">—</span></div>
+    <div class="stat"><span>vs her plan</span><span class="v" id="nextPlan">—</span></div>
+    <div class="stat"><span>Cut-off margin</span><span class="v" id="nextCut">—</span></div>
+    <hr style="border:none;border-top:1px solid var(--line);margin:10px 0">
+    <div class="stat"><span>Current pace</span><span class="v" id="pace">—</span></div>
+    <div class="stat"><span>Elapsed / distance</span><span class="v" id="elapsed">—</span></div>
+    <div class="stat"><span>Projected finish</span><span class="v" id="finish">—</span></div>
+  </div>
+
+  <!-- ELEVATION -->
+  <div class="card" id="elevCard">
+    <div class="next" style="margin-bottom:8px">Elevation profile · her position ▼</div>
+    <div class="scroll"><div id="elev"></div></div>
+    <div class="hint">Approximate height profile (metres). Big climbs labelled. The blue marker is her current mile point.</div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="card scroll" id="tableCard" style="display:none">
+    <table>
+      <thead>
+        <tr><th>Checkpoint</th><th>Mile</th><th>ETA</th><th>Status</th><th>Fast</th><th>Slow</th><th>Cut-off</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="hint">ETA uses current pace. <b>Status</b>: 🟢 ahead of fast plan · 🔵 within plan · 🟠 behind plan but inside cut-off · 🔴 past cut-off. A82 crossing &amp; Victoria Bridge have no mileage so are shown for reference only.</div>
+  </div>
+
+</div>
+
+<script>
+// ---- Race data --------------------------------------------------------
+// Times stored as ELAPSED HOURS from the 01:00 start. null = not published.
+// mile null = no mileage given (reference row, excluded from projection).
+const CP = [
+  {name:"Milngavie (start)",   mile:0,    fast:0,     slow:0,     cut:0},
+  {name:"Balmaha",             mile:19,   fast:4+29/60, slow:4+56/60, cut:5},
+  {name:"Rowardennan",         mile:27,   fast:6+29/60, slow:7,       cut:null},
+  {name:"Inversnaid",          mile:35,   fast:8+23/60, slow:9,       cut:null},
+  {name:"Beinglas Farm",       mile:42,   fast:10+26/60,slow:11.5,    cut:12},
+  {name:"A82 crossing",        mile:null, fast:null,    slow:null,    cut:null},
+  {name:"Tyndrum",             mile:53,   fast:14,      slow:15.5,    cut:16.25},
+  {name:"Bridge of Orchy",     mile:60,   fast:16,      slow:18,      cut:18.5},
+  {name:"Victoria Bridge",     mile:null, fast:16.75,   slow:19,      cut:null},
+  {name:"Glencoe Ski Resort",  mile:71,   fast:18.5,    slow:22,      cut:23},
+  {name:"Kinlochleven (school)",mile:81,  fast:22.75,   slow:27,      cut:28},
+  {name:"Lundavra",            mile:88,   fast:26,      slow:31,      cut:32},
+  {name:"Finish (Nevis Centre)",mile:95,  fast:28,      slow:33.75,   cut:35},
+];
+
+// ---- Elevation profile (approx metres by mile) ------------------------
+const ELEV=[
+  [0,50],[7,80],[12,70],[15,120],[18,335],[19,20],[22,90],[27,30],[30,60],
+  [35,25],[38,120],[40,200],[42,30],[46,150],[48,210],[50,170],[53,210],
+  [57,230],[60,150],[61,320],[62,180],[65,380],[68,445],[70,280],[71,250],
+  [73,330],[75,548],[78,250],[81,10],[83,290],[85,330],[88,250],[90,250],
+  [92,150],[95,15]
+];
+const PEAKS=[
+  [18,"Conic Hill"],[68,"Rannoch Moor"],[75,"Devil's Staircase 548m"],
+  [81,"Kinlochleven (low)"],[85,"Lairigmor"]
+];
+function drawElevation(curMile){
+  const W=760,H=210, padL=34,padR=10,padT=18,padB=24;
+  const maxE=560, maxMi=95;
+  const X=mi=>padL+(mi/maxMi)*(W-padL-padR);
+  const Y=e=>padT+(1-e/maxE)*(H-padT-padB);
+  let area="M "+X(0)+" "+Y(0);
+  ELEV.forEach(p=>area+=" L "+X(p[0])+" "+Y(p[1]));
+  area+=" L "+X(maxMi)+" "+Y(0)+" Z";
+  let line="M "+X(ELEV[0][0])+" "+Y(ELEV[0][1]);
+  ELEV.slice(1).forEach(p=>line+=" L "+X(p[0])+" "+Y(p[1]));
+  // gridlines
+  let grid="";
+  [0,200,400].forEach(e=>{
+    grid+='<line x1="'+padL+'" y1="'+Y(e)+'" x2="'+(W-padR)+'" y2="'+Y(e)+'" stroke="#2d3a47" stroke-width="1"/>'+
+          '<text x="'+(padL-5)+'" y="'+(Y(e)+3)+'" fill="#8a99a8" font-size="9" text-anchor="end">'+e+'</text>';
+  });
+  // checkpoint ticks
+  let ticks="";
+  CP.filter(c=>c.mile!=null).forEach(c=>{
+    const elev = interpElev(c.mile);
+    ticks+='<circle cx="'+X(c.mile)+'" cy="'+Y(elev)+'" r="2.5" fill="#8a99a8"/>';
+  });
+  // peak labels
+  let peaks="";
+  PEAKS.forEach(p=>{
+    const e=interpElev(p[0]);
+    peaks+='<text x="'+X(p[0])+'" y="'+(Y(e)-6)+'" fill="#c7d2dc" font-size="8.5" text-anchor="middle">'+p[1]+'</text>';
+  });
+  // current position marker
+  let marker="";
+  if(curMile!=null && !isNaN(curMile)){
+    const cm=Math.max(0,Math.min(maxMi,curMile));
+    const e=interpElev(cm);
+    marker='<line x1="'+X(cm)+'" y1="'+padT+'" x2="'+X(cm)+'" y2="'+(H-padB)+'" stroke="#4da3ff" stroke-width="1.5" stroke-dasharray="3 3"/>'+
+           '<circle cx="'+X(cm)+'" cy="'+Y(e)+'" r="5" fill="#4da3ff" stroke="#0f1419" stroke-width="1.5"/>';
+  }
+  $("elev").innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;min-width:620px;height:auto;display:block">'+
+    grid+
+    '<path d="'+area+'" fill="rgba(77,163,255,.12)"/>'+
+    '<path d="'+line+'" fill="none" stroke="#4da3ff" stroke-width="1.5"/>'+
+    ticks+peaks+marker+
+    '<text x="'+X(0)+'" y="'+(H-6)+'" fill="#8a99a8" font-size="9">0mi</text>'+
+    '<text x="'+X(95)+'" y="'+(H-6)+'" fill="#8a99a8" font-size="9" text-anchor="end">95mi</text>'+
+    '</svg>';
+}
+function interpElev(mile){
+  if(mile<=ELEV[0][0]) return ELEV[0][1];
+  for(let i=0;i<ELEV.length-1;i++){
+    if(mile>=ELEV[i][0] && mile<=ELEV[i+1][0]){
+      const f=(mile-ELEV[i][0])/(ELEV[i+1][0]-ELEV[i][0]);
+      return ELEV[i][1]+f*(ELEV[i+1][1]-ELEV[i][1]);
+    }
+  }
+  return ELEV[ELEV.length-1][1];
+}
+
+// ---- Elements ---------------------------------------------------------
+const $ = id => document.getElementById(id);
+const startEl=$("start"), mileEl=$("mile"), timeEl=$("time"),
+      pmileEl=$("pmile"), ptimeEl=$("ptime"), manualEl=$("manual");
+
+// Default race start: Sat 20 Jun 2026, 01:00
+startEl.value = "2026-06-20T01:00";
+
+// Persist inputs — Safari discards background tabs, so restore on reopen.
+const SAVE_FIELDS=["start","mile","time","pmile","ptime","manual"];
+function save(){ try{ const o={}; SAVE_FIELDS.forEach(f=>o[f]=$(f).value);
+  localStorage.setItem("whw",JSON.stringify(o)); }catch(e){} }
+function restore(){ try{ const o=JSON.parse(localStorage.getItem("whw")||"{}");
+  SAVE_FIELDS.forEach(f=>{ if(o[f]!=null && o[f]!=="") $(f).value=o[f]; }); }catch(e){} }
+restore();
+
+// Quick checkpoint buttons
+CP.filter(c=>c.mile!=null).forEach(c=>{
+  const b=document.createElement("button");
+  b.className="btn chip";
+  b.textContent=c.name.replace(/ \(.*/,"")+" ("+c.mile+")";
+  b.onclick=()=>{mileEl.value=c.mile; render();};
+  $("cpButtons").appendChild(b);
+});
+
+// ---- Helpers ----------------------------------------------------------
+// Safari is strict about new Date(string) — parse the datetime-local value
+// ("YYYY-MM-DDTHH:MM") into components manually so it never returns Invalid Date.
+function parseStart(){
+  const v=(startEl.value||"2026-06-20T01:00");
+  const [date,time]=v.split("T");
+  const [y,mo,d]=date.split("-").map(Number);
+  const [h,mi]=((time||"01:00").split(":")).map(Number);
+  return new Date(y,(mo||1)-1,d||1,h||0,mi||0,0,0);
+}
+function startMs(){ return parseStart().getTime(); }
+function startMidnightMs(){ const s=parseStart(); return new Date(s.getFullYear(),s.getMonth(),s.getDate(),0,0,0,0).getTime(); }
+
+// Convert a time-input value (HH:MM) on the update to absolute ms,
+// picking the day so the result is >= start and as soon as possible after it.
+function clockToMs(hhmm){
+  if(!hhmm) return null;
+  const [h,m]=hhmm.split(":").map(Number);
+  if(isNaN(h)||isNaN(m)) return null;
+  const s=parseStart();
+  let d=new Date(s.getFullYear(),s.getMonth(),s.getDate(),h,m,0,0);
+  // roll into next day(s) if needed — rebuild from components to stay DST-correct
+  while(d.getTime() < startMs()-1) d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,h,m,0,0);
+  return d.getTime();
+}
+function fmtClock(elapsedH){
+  if(elapsedH==null) return "—";
+  const d=new Date(startMs()+elapsedH*3600000);
+  const day=Math.floor((d.getTime()-startMidnightMs())/86400000);
+  const hh=String(d.getHours()).padStart(2,"0"), mm=String(d.getMinutes()).padStart(2,"0");
+  return hh+":"+mm + (day>=1 ? " +"+day+"d":"");
+}
+function fmtDur(h){
+  if(h==null||!isFinite(h)) return "—";
+  const neg=h<0; h=Math.abs(h);
+  const H=Math.floor(h), M=Math.round((h-H)*60);
+  return (neg?"-":"")+H+"h "+String(M).padStart(2,"0")+"m";
+}
+// linear interpolation of a plan line (fast/slow/cut) at a given mile
+function planAtMile(mile,key){
+  const pts=CP.filter(c=>c.mile!=null && c[key]!=null);
+  if(mile<=pts[0].mile) return pts[0][key];
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1];
+    if(mile>=a.mile && mile<=b.mile){
+      const f=(mile-a.mile)/(b.mile-a.mile);
+      return a[key]+f*(b[key]-a[key]);
+    }
+  }
+  return pts[pts.length-1][key];
+}
+
+// ---- Main render ------------------------------------------------------
+function render(){
+  const mile=parseFloat(mileEl.value);
+  drawElevation(isNaN(mile)?null:mile);
+  const nowMs=clockToMs(timeEl.value);
+  if(isNaN(mile)||nowMs==null){ return; }
+
+  const elapsedH=(nowMs-startMs())/3600000;
+  if(elapsedH<0) return;
+
+  // pace in minutes per mile
+  let paceMinMi, paceSrc;
+  const manual=parseFloat(manualEl.value);
+  const pmile=parseFloat(pmileEl.value), pMs=clockToMs(ptimeEl.value);
+  if(!isNaN(manual) && manual>0){ paceMinMi=manual; paceSrc="manual"; }
+  else if(!isNaN(pmile) && pMs!=null && mile>pmile && nowMs>pMs){
+    paceMinMi=((nowMs-pMs)/60000)/(mile-pmile); paceSrc="recent (last update)";
+  } else if(mile>0 && elapsedH>0){
+    paceMinMi=(elapsedH*60)/mile; paceSrc="average from start";
+  } else { paceMinMi=null; }
+
+  const speedMph = paceMinMi? 60/paceMinMi : null;
+
+  // ---- on-track status at current position ----
+  const planF=planAtMile(mile,"fast"), planS=planAtMile(mile,"slow"), planC=planAtMile(mile,"cut");
+  let bClass,bText;
+  if(elapsedH<=planF){ bClass="b-green";
+    bText="🟢 AHEAD of fast plan — "+fmtDur(planF-elapsedH)+" up on her quick estimate."; }
+  else if(elapsedH<=planS){ bClass="b-blue";
+    bText="🔵 ON PLAN — between her fast and slow estimates ("+fmtDur(planS-elapsedH)+" inside slow time)."; }
+  else if(planC==null || elapsedH<=planC){ bClass="b-amber";
+    bText="🟠 BEHIND slow plan but inside the cut-offs"+(planC!=null?" ("+fmtDur(planC-elapsedH)+" of cut-off margin here).":"."); }
+  else { bClass="b-red";
+    bText="🔴 BEHIND cut-off pace at this point — "+fmtDur(elapsedH-planC)+" over the cut-off line."; }
+  const ban=$("banner"); ban.className="banner "+bClass; ban.textContent=bText;
+
+  // ---- projections ----
+  const tbody=$("tbody"); tbody.innerHTML="";
+  let nextDone=false;
+  function statusFor(eta,c){
+    if(c.cut!=null && eta>c.cut) return ["p-red","🔴 past cut-off"];
+    if(eta<=c.fast) return ["p-green","🟢 ahead"];
+    if(c.slow!=null && eta<=c.slow) return ["p-blue","🔵 on plan"];
+    return ["p-amber","🟠 behind"];
+  }
+
+  let firstNext=null;
+  CP.forEach(c=>{
+    const tr=document.createElement("tr");
+    const reachable = c.mile!=null;
+    let etaH=null, statusHtml="";
+    if(reachable && c.mile<=mile){ tr.className="done"; }
+    else if(reachable && paceMinMi){
+      etaH = elapsedH + ((c.mile-mile)*paceMinMi)/60;
+      const [pc,txt]=statusFor(etaH,c);
+      statusHtml='<span class="pill '+pc+'">'+txt.split(" ")[0]+'</span>';
+      if(!firstNext){ firstNext={c,etaH,pc,txt}; tr.className="cur"; }
+    }
+    if(!reachable) tr.className="dim";
+    tr.innerHTML =
+      "<td>"+c.name+"</td>"+
+      "<td>"+(c.mile!=null?c.mile:"–")+"</td>"+
+      "<td>"+(etaH!=null?fmtClock(etaH):(reachable&&c.mile<=mile?"✓":"—"))+"</td>"+
+      "<td>"+statusHtml+"</td>"+
+      "<td>"+fmtClock(c.fast)+"</td>"+
+      "<td>"+fmtClock(c.slow)+"</td>"+
+      "<td>"+(c.cut!=null?fmtClock(c.cut):"—")+"</td>";
+    tbody.appendChild(tr);
+  });
+
+  // ---- summary card ----
+  $("summary").style.display="block";
+  $("tableCard").style.display="block";
+  $("pace").textContent = paceMinMi? (paceMinMi.toFixed(1)+" min/mi · "+speedMph.toFixed(2)+" mph · "+paceSrc) : "—";
+  $("elapsed").textContent = fmtDur(elapsedH)+" · "+mile+" mi done · "+(95-mile).toFixed(1)+" mi to go";
+
+  const fin=CP[CP.length-1];
+  const finEta = paceMinMi? elapsedH+((fin.mile-mile)*paceMinMi)/60 : null;
+  $("finish").textContent = finEta!=null? fmtClock(finEta)+" (total "+fmtDur(finEta)+")" : "—";
+
+  if(firstNext){
+    const {c,etaH,txt}=firstNext;
+    $("nextName").textContent=c.name+" · mile "+c.mile;
+    $("nextEta").textContent=fmtClock(etaH)+"  (in "+fmtDur(etaH-elapsedH)+")";
+    let planTxt = "fast "+fmtClock(c.fast)+" / slow "+fmtClock(c.slow);
+    $("nextPlan").innerHTML = txt + " — " + planTxt;
+    $("nextCut").textContent = c.cut!=null
+      ? (etaH<=c.cut? fmtDur(c.cut-etaH)+" to spare (cut-off "+fmtClock(c.cut)+")"
+                    : "⚠ "+fmtDur(etaH-c.cut)+" OVER (cut-off "+fmtClock(c.cut)+")")
+      : "no cut-off here";
+  } else {
+    $("nextName").textContent="Finished 🎉";
+    $("nextEta").textContent="—"; $("nextPlan").textContent="—"; $("nextCut").textContent="—";
+  }
+}
+
+function setNow(){
+  const d=new Date();
+  timeEl.value=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  save(); render();
+}
+
+["mile","time","pmile","ptime","manual","start"].forEach(id=>{
+  $(id).addEventListener("input",()=>{ save(); render(); });
+  $(id).addEventListener("change",()=>{ save(); render(); });
+});
+document.addEventListener("visibilitychange",()=>{ if(document.hidden) save(); });
+drawElevation(null);
+if(timeEl.value){ render(); } else { setNow(); }
+</script>
+</body>
+</html>
