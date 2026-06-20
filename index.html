@@ -169,7 +169,7 @@
       </thead>
       <tbody id="tbody"></tbody>
     </table>
-    <div class="hint"><b>Bold</b> times are actual splits (from GPS); plain times are projected ETAs at current pace, with ± vs her slow plan. <b>Status</b>: 🟢 ahead of fast · 🔵 within plan · 🟠 behind plan but inside cut-off · 🔴 past cut-off. A82 crossing &amp; Victoria Bridge have no distance so are reference only.</div>
+    <div class="hint"><b>Bold●</b> = official SportIdent dib time (exact); <b>bold</b> = GPS-estimated split; plain = projected ETA at current pace, with ± vs slow plan. <b>Status</b>: 🟢 ahead of fast · 🔵 within plan · 🟠 behind but inside cut-off · 🔴 past cut-off. A82 crossing &amp; Victoria Bridge have no distance so are reference only.</div>
   </div>
 
 </div>
@@ -361,7 +361,7 @@ async function fetchFeed(){
 let autoTimer=null;
 function setAuto(){
   if(autoTimer){ clearInterval(autoTimer); autoTimer=null; }
-  if($("autoFetch").checked){ autoTimer=setInterval(fetchFeed,5*60000); fetchFeed(); }
+  if($("autoFetch").checked){ autoTimer=setInterval(()=>{ fetchFeed(); fetchSI(); },5*60000); fetchFeed(); fetchSI(); }
   try{ localStorage.setItem("whw_auto",$("autoFetch").checked?"1":""); }catch(e){}
 }
 // tolerant parser: Garmin {trackPoints:[{dateTime,position:{lat,lon}}]}, arrays, or CSV-ish rows
@@ -405,6 +405,32 @@ function parseTrack(text){
   }
   pts.sort((a,b)=>a.t-b.t);
   return pts.length?pts:null;
+}
+
+// ---- Official SportIdent electronic splits (exact dib times) -----------
+const SI_PROXY="https://whw-tracker-proxy.tangy-chokeberry.workers.dev/?url=";
+const SI_URL="https://www.sportident.co.uk/results/WestHighlandWayRace/2026/WHW/index_0_data.txt";
+const SI_BIB="190";
+// SportIdent timing points in order → mapped to our checkpoint names
+const SI_ORDER=["Balmaha","Rowardennan","Inversnaid","Beinglas Farm","Tyndrum","Bridge of Orchy","Glencoe Ski Resort","Kinlochleven (school)","Lundavra","Finish (Nevis Centre)"];
+let OFFICIAL=null;  // {byName:{cp:elapsedH}, elapsedH, lastLocation, nextEta, pos, cat}
+function siToH(t){ const m=String(t).match(/(\d+):(\d{2}):(\d{2})/); return m?(+m[1])+(+m[2])/60+(+m[3])/3600:null; }
+function parseSI(text){
+  let j; try{ j=JSON.parse(text.replace(/^﻿/,"")); }catch(e){ return null; }
+  if(!j||!j.data) return null;
+  const row=j.data.find(r=>String(r[2])===SI_BIB);
+  if(!row) return null;
+  const strip=v=>String(v).replace(/<br\s*\/?>/gi," / ").replace(/<[^>]+>/g,"").replace(/&nbsp;/g,"").replace(/&amp;/g,"&").trim();
+  const splits=[];
+  for(let i=11;i<row.length;i++){ const v=strip(row[i]);
+    const m=v.match(/^(\d{1,2}:\d{2}:\d{2})\s*\/\s*(\d{1,2}:\d{2}:\d{2})$/); if(m) splits.push(siToH(m[2])); }
+  const byName={}; splits.forEach((h,i)=>{ if(SI_ORDER[i]) byName[SI_ORDER[i]]=h; });
+  return { pos:strip(row[0]), name:strip(row[3]), cat:strip(row[6]), lastLocation:strip(row[7]),
+           elapsedH:siToH(strip(row[8])), nextEta:strip(row[10]), byName, count:splits.length };
+}
+async function fetchSI(){
+  try{ const r=await fetch(SI_PROXY+encodeURIComponent(SI_URL),{cache:"no-store"});
+    const o=parseSI(await r.text()); if(o){ OFFICIAL=o; render(); } }catch(e){}
 }
 
 // Quick checkpoint buttons
@@ -508,6 +534,11 @@ function render(){
     mile=parseFloat(mileEl.value);
     nowMs=clockToMs(timeEl.value);
   }
+  // no live GPS / manual? anchor on her last official SportIdent checkpoint
+  if((mile==null||isNaN(mile)||nowMs==null) && OFFICIAL && OFFICIAL.elapsedH!=null){
+    let lastKm=null; CP.forEach(c=>{ if(c.mile!=null && OFFICIAL.byName[c.name]!=null) lastKm=c.mile; });
+    if(lastKm!=null){ mile=lastKm; nowMs=startMs()+OFFICIAL.elapsedH*3600000; }
+  }
 
   drawElevation((mile==null||isNaN(mile))?null:mile);
   updateTrackStatus(live,series);
@@ -546,8 +577,15 @@ function render(){
     const planH=planAtMile(last.mile,"slow")-planAtMile(a.mile,"slow");
     if((last.mile-a.mile)>0.3 && planH>0.05) recentR=((last.t-a.t)/3600000)/planH;
   }
-  // weight her whole-race form 70% / recent 30% so one hard section can't dominate
-  let R = (overallR!=null && recentR!=null) ? 0.7*overallR+0.3*recentR : (overallR!=null?overallR:recentR);
+  // exact official form: her last SportIdent split vs the slow plan at that gate (best anchor)
+  let officialR=null;
+  if(OFFICIAL && OFFICIAL.elapsedH!=null){
+    let lastKm=null; CP.forEach(c=>{ if(c.mile!=null && OFFICIAL.byName[c.name]!=null) lastKm=c.mile; });
+    if(lastKm!=null){ const ps=planAtMile(lastKm,"slow"); if(ps>0.1) officialR=OFFICIAL.elapsedH/ps; }
+  }
+  // prefer the exact official ratio; else whole-race 70% / recent 30%
+  let R = officialR!=null ? (recentR!=null? 0.8*officialR+0.2*recentR : officialR)
+        : ((overallR!=null && recentR!=null) ? 0.7*overallR+0.3*recentR : (overallR!=null?overallR:recentR));
   if(R!=null) R=Math.max(0.4,Math.min(3,R));
   function projEtaH(km){
     if(R!=null) return elapsedH + (planAtMile(km,"slow")-planNow)*R;
@@ -586,7 +624,12 @@ function render(){
   CP.forEach(c=>{
     const tr=document.createElement("tr"); const reachable=c.mile!=null;
     let timeCell="—", statusHtml="", etaH=null;
-    if(reachable && crossings[c.mile]!=null){            // ACTUAL split from GPS
+    const offH = OFFICIAL && OFFICIAL.byName[c.name];    // exact official elapsed
+    if(reachable && offH!=null){                          // OFFICIAL SportIdent dib time
+      const [pc,ic]=statusFor(offH,c); statusHtml='<span class="pill '+pc+'">'+ic+'</span>';
+      const dv=c.slow!=null?' <span style="color:var(--muted)">('+fmtDeltaH(offH,c.slow)+')</span>':'';
+      timeCell='<b>'+fmtClock(offH)+'</b><span style="color:var(--green)" title="official SportIdent timing">●</span>'+dv; tr.className="done";
+    } else if(reachable && crossings[c.mile]!=null){     // GPS-estimated split
       const aH=(crossings[c.mile]-startMs())/3600000;
       const [pc,ic]=statusFor(aH,c); statusHtml='<span class="pill '+pc+'">'+ic+'</span>';
       const dv=c.slow!=null?' <span style="color:var(--muted)">('+fmtDeltaH(aH,c.slow)+')</span>':'';
@@ -628,6 +671,15 @@ function render(){
     $("nextName").textContent = mile>=152.3?"Finished 🎉":"—";
     $("nextEta").textContent="—"; $("nextPlan").textContent="—"; $("nextCut").textContent="—";
   }
+
+  // ---- data-source status line (live GPS + official SportIdent) ----
+  { const el=$("trackStatus");
+    let s = (live&&series) ? "🛰 Live GPS: "+series.length+" pings · last fix "+fmtClock(elapsedH)+" · km "+mile.toFixed(1)
+          : "Position from "+(OFFICIAL?"official SportIdent":"manual input")+".";
+    if(OFFICIAL) s+="<br>🏅 <b>SportIdent</b> ("+OFFICIAL.pos+", "+OFFICIAL.cat+"): last dibbed <b>"+OFFICIAL.lastLocation+
+      "</b> at "+fmtClock(OFFICIAL.elapsedH)+(OFFICIAL.nextEta?" · their ETA: "+OFFICIAL.nextEta:"");
+    if(el) el.innerHTML=s;
+  }
 }
 
 function setNow(){
@@ -645,6 +697,7 @@ $("autoFetch").addEventListener("change",setAuto);
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) save(); });
 drawElevation(null);
 if(RAW_HISTORY || timeEl.value){ render(); } else { setNow(); }
+fetchSI();  // pull official SportIdent splits on load
 // resume auto-refresh if it was on
 try{ if(localStorage.getItem("whw_auto")){ $("autoFetch").checked=true; setAuto(); } }catch(e){}
 </script>
