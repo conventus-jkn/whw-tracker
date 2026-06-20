@@ -178,20 +178,21 @@
 // ---- Race data --------------------------------------------------------
 // Times stored as ELAPSED HOURS from the 01:00 start. null = not published.
 // Distances (mile) are in KILOMETRES. km null = no distance given (reference row).
+// Distances (mile) are KILOMETRES, pinned to GeoTracks' OFFICIAL checkpoint positions.
 const CP = [
   {name:"Milngavie (start)",   mile:0,     fast:0,     slow:0,     cut:0},
-  {name:"Balmaha",             mile:30.6,  fast:4+29/60, slow:4+56/60, cut:5},
-  {name:"Rowardennan",         mile:43.5,  fast:6+29/60, slow:7,       cut:null},
-  {name:"Inversnaid",          mile:56.3,  fast:8+23/60, slow:9,       cut:null},
-  {name:"Beinglas Farm",       mile:67.6,  fast:10+26/60,slow:11.5,    cut:12},
+  {name:"Balmaha",             mile:30.3,  fast:4+29/60, slow:4+56/60, cut:5},
+  {name:"Rowardennan",         mile:42.6,  fast:6+29/60, slow:7,       cut:null},
+  {name:"Inversnaid",          mile:54.2,  fast:8+23/60, slow:9,       cut:null},
+  {name:"Beinglas Farm",       mile:64.8,  fast:10+26/60,slow:11.5,    cut:12},
   {name:"A82 crossing",        mile:null,  fast:null,    slow:null,    cut:null},
-  {name:"Tyndrum",             mile:85.3,  fast:14,      slow:15.5,    cut:16.25},
-  {name:"Bridge of Orchy",     mile:96.6,  fast:16,      slow:18,      cut:18.5},
+  {name:"Tyndrum",             mile:83.5,  fast:14,      slow:15.5,    cut:16.25},
+  {name:"Bridge of Orchy",     mile:94.6,  fast:16,      slow:18,      cut:18.5},
   {name:"Victoria Bridge",     mile:null,  fast:16.75,   slow:19,      cut:null},
-  {name:"Glencoe Ski Resort",  mile:114.3, fast:18.5,    slow:22,      cut:23},
-  {name:"Kinlochleven (school)",mile:130.4,fast:22.75,   slow:27,      cut:28},
-  {name:"Lundavra",            mile:141.6, fast:26,      slow:31,      cut:32},
-  {name:"Finish (Nevis Centre)",mile:152.9,fast:28,      slow:33.75,   cut:35},
+  {name:"Glencoe Ski Resort",  mile:111.7, fast:18.5,    slow:22,      cut:23},
+  {name:"Kinlochleven (school)",mile:128.4,fast:22.75,   slow:27,      cut:28},
+  {name:"Lundavra",            mile:140.5, fast:26,      slow:31,      cut:32},
+  {name:"Finish (Nevis Centre)",mile:152.4,fast:28,      slow:33.75,   cut:35},
 ];
 
 // ---- Elevation profile (REAL surveyed data from the GeoTracks WHW route, km) --
