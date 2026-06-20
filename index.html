@@ -351,6 +351,12 @@ function parseTrack(text){
       if(isFinite(lat)&&isFinite(lon)&&isFinite(t)) pts.push({t,lat,lon});
     }
   }
+  if(!pts.length){ // Garmin LiveTrack page/HTML: embedded "dateTime"+"position" objects
+    const u=text.replace(/\\"/g,'"');
+    const re=/"dateTime":"([^"]+)"[^}]*?"position":\{"lat":([-0-9.]+),"lon":([-0-9.]+)\}/g;
+    let m; while((m=re.exec(u))){ const t=Date.parse(m[1]),lat=+m[2],lon=+m[3];
+      if(isFinite(lat)&&isFinite(lon)&&isFinite(t)) pts.push({t,lat,lon}); }
+  }
   if(!pts.length){ // loose: newline rows "lat,lon,time" or "time,lat,lon"
     text.split(/\n/).forEach(line=>{
       const c=line.split(/[,;\t]/).map(s=>s.trim()); if(c.length<3) return;
