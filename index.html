@@ -564,14 +564,21 @@ function render(){
   }
   drawElevation(mile, timeAtKm);
 
-  // ---- on-track banner ----
-  const planF=planAtMile(mile,"fast"), planS=planAtMile(mile,"slow"), planC=planAtMile(mile,"cut");
-  let bClass,bText;
-  if(elapsedH<=planF){ bClass="b-green"; bText="🟢 AHEAD of fast plan — "+fmtDur(planF-elapsedH)+" up on her quick estimate."; }
-  else if(elapsedH<=planS){ bClass="b-blue"; bText="🔵 ON PLAN — between fast and slow ("+fmtDur(planS-elapsedH)+" inside slow time)."; }
-  else if(planC==null||elapsedH<=planC){ bClass="b-amber"; bText="🟠 BEHIND slow plan but inside the cut-offs"+(planC!=null?" ("+fmtDur(planC-elapsedH)+" cut-off margin here).":"."); }
-  else { bClass="b-red"; bText="🔴 BEHIND cut-off pace here — "+fmtDur(elapsedH-planC)+" over the cut-off line."; }
-  const ban=$("banner"); ban.className="banner "+bClass; ban.textContent=bText;
+  // ---- on-track banner (forward-looking on the NEXT real cut-off, so it agrees with the table) ----
+  const planF=planAtMile(mile,"fast"), planS=planAtMile(mile,"slow");
+  let nextCut=null;
+  for(const c of CP){ if(c.mile!=null && c.mile>mile && c.cut!=null){ nextCut=c; break; } }
+  let bClass, pos;
+  if(elapsedH<=planF){ bClass="b-green"; pos="🟢 AHEAD of fast plan ("+fmtDur(planF-elapsedH)+" up)"; }
+  else if(elapsedH<=planS){ bClass="b-blue"; pos="🔵 ON PLAN ("+fmtDur(planS-elapsedH)+" inside slow)"; }
+  else { bClass="b-amber"; pos="🟠 "+fmtDur(elapsedH-planS)+" behind slow plan"; }
+  let cutMsg="";
+  if(nextCut && canProject){
+    const eta=projEtaH(nextCut.mile), nm=nextCut.name.replace(/ \(.*/,"");
+    if(eta>nextCut.cut){ bClass="b-red"; cutMsg=" — ⚠ projected to MISS "+nm+" cut-off "+fmtClock(nextCut.cut)+" by "+fmtDur(eta-nextCut.cut); }
+    else cutMsg=" — on track for "+nm+" cut-off ("+fmtDur(nextCut.cut-eta)+" spare)";
+  }
+  const ban=$("banner"); ban.className="banner "+bClass; ban.textContent=pos+cutMsg;
 
   // ---- table: actual splits for passed checkpoints, ETA for the rest ----
   const tbody=$("tbody"); tbody.innerHTML=""; let firstNext=null;
