@@ -158,7 +158,7 @@
   <div class="card" id="elevCard">
     <div class="next" style="margin-bottom:8px">Elevation profile · her position ▼</div>
     <div class="scroll"><div id="elev"></div></div>
-    <div class="hint">Real surveyed height profile (metres) from the official race route · 152.4 km · 2,724 m total ascent. The blue marker is her current km point.</div>
+    <div class="hint">Height profile (m) · 152.4 km · 2,724 m ascent. Line colour = her status along the route: 🟢 ahead of fast · 🔵 within plan · 🟠→🔴 shading from amber to red as her time nears the cut-off. Past sections use actual times; ahead uses projected pace.</div>
   </div>
 
   <!-- TABLE -->
@@ -200,7 +200,20 @@ const PEAKS=[
   [28.3,"Conic Hill 330m"],[109.0,"Rannoch Moor"],[120.5,"Devil's Staircase 539m"],
   [128.4,"Kinlochleven (low)"],[134.2,"Lairigmor"]
 ];
-function drawElevation(curMile){
+function hexLerp(a,b,t){
+  const pa=[1,3,5].map(i=>parseInt(a.substr(i,2),16)), pb=[1,3,5].map(i=>parseInt(b.substr(i,2),16));
+  return "#"+pa.map((v,i)=>Math.round(v+(pb[i]-v)*t).toString(16).padStart(2,"0")).join("");
+}
+// colour for a km point: green ahead of fast, blue within plan, amber→red approaching cut-off
+function statusColor(km,timeAtKm){
+  const t=timeAtKm? timeAtKm(km):null; if(t==null) return "#4da3ff";
+  const f=planAtMile(km,"fast"), s=planAtMile(km,"slow"), c=planAtMile(km,"cut");
+  if(f!=null && t<=f) return "#36c46b";
+  if(s!=null && t<=s) return "#4da3ff";
+  if(c!=null && c>s){ const u=Math.max(0,Math.min(1,(t-s)/(c-s))); return hexLerp("#f5b942","#ff5d5d",u); }
+  return "#f5b942";
+}
+function drawElevation(curMile, timeAtKm){
   const W=760,H=210, padL=34,padR=10,padT=18,padB=24;
   const maxE=560, maxMi=153;
   const X=mi=>padL+(mi/maxMi)*(W-padL-padR);
@@ -208,8 +221,18 @@ function drawElevation(curMile){
   let area="M "+X(0)+" "+Y(0);
   ELEV.forEach(p=>area+=" L "+X(p[0])+" "+Y(p[1]));
   area+=" L "+X(maxMi)+" "+Y(0)+" Z";
-  let line="M "+X(ELEV[0][0])+" "+Y(ELEV[0][1]);
-  ELEV.slice(1).forEach(p=>line+=" L "+X(p[0])+" "+Y(p[1]));
+  let lineSvg;
+  if(timeAtKm){ // colour each segment by status at its midpoint
+    lineSvg="";
+    for(let i=0;i<ELEV.length-1;i++){ const a=ELEV[i],b=ELEV[i+1];
+      const col=statusColor((a[0]+b[0])/2,timeAtKm);
+      lineSvg+='<path d="M '+X(a[0])+' '+Y(a[1])+' L '+X(b[0])+' '+Y(b[1])+'" fill="none" stroke="'+col+'" stroke-width="2.6" stroke-linecap="round"/>';
+    }
+  } else {
+    let line="M "+X(ELEV[0][0])+" "+Y(ELEV[0][1]);
+    ELEV.slice(1).forEach(p=>line+=" L "+X(p[0])+" "+Y(p[1]));
+    lineSvg='<path d="'+line+'" fill="none" stroke="#4da3ff" stroke-width="1.5"/>';
+  }
   // gridlines
   let grid="";
   [0,200,400].forEach(e=>{
@@ -238,8 +261,8 @@ function drawElevation(curMile){
   }
   $("elev").innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;min-width:620px;height:auto;display:block">'+
     grid+
-    '<path d="'+area+'" fill="rgba(77,163,255,.12)"/>'+
-    '<path d="'+line+'" fill="none" stroke="#4da3ff" stroke-width="1.5"/>'+
+    '<path d="'+area+'" fill="rgba(77,163,255,.10)"/>'+
+    lineSvg+
     ticks+peaks+marker+
     '<text x="'+X(0)+'" y="'+(H-6)+'" fill="#8a99a8" font-size="9">0km</text>'+
     '<text x="'+X(153)+'" y="'+(H-6)+'" fill="#8a99a8" font-size="9" text-anchor="end">153km</text>'+
@@ -505,6 +528,16 @@ function render(){
   if(!isNaN(mov)&&mov>0){ paceMinMi=mov; paceSrc=live?"manual override":paceSrc; }
 
   const speedMph = paceMinMi? 60/paceMinMi : null;
+
+  // ---- recolour the elevation line by her status along the route ----
+  let timeAtKm=null;
+  if(paceMinMi){
+    timeAtKm=(km)=>{
+      if(live && series && km<=mile+0.001){ const cm=crossMs(series,km); if(cm!=null) return (cm-startMs())/3600000; }
+      return elapsedH + (km-mile)*paceMinMi/60;
+    };
+  }
+  drawElevation(mile, timeAtKm);
 
   // ---- on-track banner ----
   const planF=planAtMile(mile,"fast"), planS=planAtMile(mile,"slow"), planC=planAtMile(mile,"cut");
