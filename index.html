@@ -534,16 +534,19 @@ function render(){
   // Remaining time to a gate = (slow-plan hours over that stretch) × R, so the climbs
   // her plan already accounts for carry through. Falls back to flat pace if R unknown.
   const planNow=planAtMile(mile,"slow");
-  let R=null;
+  // overall form across the whole race so far (stable, terrain-normalised by the plan shape)
+  const overallR=(planNow>0.1 && elapsedH>0)? elapsedH/planNow : null;
+  // recent ~40 min form (responsive, but noisy — a single rough section can skew it)
+  let recentR=null;
   if(live && series && series.length>1){
     const last=series[series.length-1];
     let j=series.length-1; while(j>0 && (last.t-series[j].t)<40*60000) j--;
     const a=series[j];
-    const herH=(last.t-a.t)/3600000, dkm=last.mile-a.mile;
     const planH=planAtMile(last.mile,"slow")-planAtMile(a.mile,"slow");
-    if(dkm>0.3 && planH>0.05) R=herH/planH;
+    if((last.mile-a.mile)>0.3 && planH>0.05) recentR=((last.t-a.t)/3600000)/planH;
   }
-  if(R==null && planNow>0.1 && elapsedH>0) R=elapsedH/planNow;   // overall fallback (and manual mode)
+  // weight her whole-race form 70% / recent 30% so one hard section can't dominate
+  let R = (overallR!=null && recentR!=null) ? 0.7*overallR+0.3*recentR : (overallR!=null?overallR:recentR);
   if(R!=null) R=Math.max(0.4,Math.min(3,R));
   function projEtaH(km){
     if(R!=null) return elapsedH + (planAtMile(km,"slow")-planNow)*R;
