@@ -158,7 +158,7 @@
   <div class="card" id="elevCard">
     <div class="next" style="margin-bottom:8px">Elevation profile · her position ▼</div>
     <div class="scroll"><div id="elev"></div></div>
-    <div class="hint">Height profile (m) · 152.4 km · 2,724 m ascent. Line colour = her status along the route: 🟢 ahead of fast · 🔵 within plan · 🟠→🔴 shading from amber to red as her time nears the cut-off. Past sections use actual times; ahead uses projected pace.</div>
+    <div class="hint">Height profile (m) · 152.4 km · 2,724 m ascent. Line colour = her status along the route: 🟢 ahead of fast · 🔵 within plan · 🟠→🔴 shading from amber to red as her time nears the cut-off. Past sections use actual times; ahead is projected by scaling her recent pace onto the plan's terrain (so climbs count).</div>
   </div>
 
   <!-- TABLE -->
@@ -529,12 +529,34 @@ function render(){
 
   const speedMph = paceMinMi? 60/paceMinMi : null;
 
+  // ---- plan-relative projection ----------------------------------------
+  // R = how she's running vs her SLOW plan over the recent stretch (terrain-normalised).
+  // Remaining time to a gate = (slow-plan hours over that stretch) × R, so the climbs
+  // her plan already accounts for carry through. Falls back to flat pace if R unknown.
+  const planNow=planAtMile(mile,"slow");
+  let R=null;
+  if(live && series && series.length>1){
+    const last=series[series.length-1];
+    let j=series.length-1; while(j>0 && (last.t-series[j].t)<40*60000) j--;
+    const a=series[j];
+    const herH=(last.t-a.t)/3600000, dkm=last.mile-a.mile;
+    const planH=planAtMile(last.mile,"slow")-planAtMile(a.mile,"slow");
+    if(dkm>0.3 && planH>0.05) R=herH/planH;
+  }
+  if(R==null && planNow>0.1 && elapsedH>0) R=elapsedH/planNow;   // overall fallback (and manual mode)
+  if(R!=null) R=Math.max(0.4,Math.min(3,R));
+  function projEtaH(km){
+    if(R!=null) return elapsedH + (planAtMile(km,"slow")-planNow)*R;
+    return paceMinMi? elapsedH + (km-mile)*paceMinMi/60 : null;   // flat-pace fallback
+  }
+  const canProject = R!=null || paceMinMi;
+
   // ---- recolour the elevation line by her status along the route ----
   let timeAtKm=null;
-  if(paceMinMi){
+  if(canProject){
     timeAtKm=(km)=>{
       if(live && series && km<=mile+0.001){ const cm=crossMs(series,km); if(cm!=null) return (cm-startMs())/3600000; }
-      return elapsedH + (km-mile)*paceMinMi/60;
+      return projEtaH(km);
     };
   }
   drawElevation(mile, timeAtKm);
@@ -560,8 +582,8 @@ function render(){
       timeCell='<b>'+fmtClock(aH)+'</b>'+dv; tr.className="done";
     } else if(reachable && c.mile<=mile){                // passed (manual: no split time)
       timeCell="✓"; tr.className="done";
-    } else if(reachable && paceMinMi){                   // projected ETA
-      etaH=elapsedH+((c.mile-mile)*paceMinMi)/60;
+    } else if(reachable && canProject){                  // projected ETA (plan-relative)
+      etaH=projEtaH(c.mile);
       const [pc,ic]=statusFor(etaH,c); statusHtml='<span class="pill '+pc+'">'+ic+'</span>';
       const dv=c.slow!=null?' <span style="color:var(--muted)">('+fmtDeltaH(etaH,c.slow)+')</span>':'';
       timeCell=fmtClock(etaH)+dv;
@@ -580,7 +602,7 @@ function render(){
   $("pace").textContent = paceMinMi? (paceMinMi.toFixed(1)+" min/km · "+speedMph.toFixed(2)+" km/h · "+paceSrc) : "—";
   $("elapsed").textContent = fmtDur(elapsedH)+" · "+mile.toFixed(1)+" km done · "+Math.max(0,152.4-mile).toFixed(1)+" km to go"+(live?" · as of "+fmtClock(elapsedH):"");
   const fin=CP[CP.length-1];
-  const finEta = paceMinMi && mile<fin.mile? elapsedH+((fin.mile-mile)*paceMinMi)/60 : null;
+  const finEta = canProject && mile<fin.mile? projEtaH(fin.mile) : null;
   $("finish").textContent = finEta!=null? fmtClock(finEta)+" (total "+fmtDur(finEta)+")" : (mile>=152.3?"Finished 🎉":"—");
 
   if(firstNext){
