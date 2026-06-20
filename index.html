@@ -126,11 +126,14 @@
       <div><button class="btn" style="width:100%" onclick="clearTrack()">Clear (back to manual)</button></div>
     </div>
     <div style="margin-top:10px">
-      <label>…or fetch live from a URL (Garmin / proxy)</label>
+      <label>…or auto-fetch live — paste her Garmin LiveTrack session URL</label>
       <div class="row">
-        <div><input id="feedUrl" type="url" inputmode="url" placeholder="https://…"></div>
-        <div style="flex:0 0 auto"><button class="btn" onclick="fetchFeed()">Fetch</button></div>
+        <div><input id="feedUrl" type="url" inputmode="url" placeholder="https://live.garmin.com/session/…/token/…"></div>
+        <div style="flex:0 0 auto"><button class="btn" onclick="fetchFeed()">Fetch now</button></div>
       </div>
+      <label style="margin-top:8px;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px">
+        <input type="checkbox" id="autoFetch" style="width:18px;height:18px;flex:0 0 auto"> Auto-refresh every 5 minutes
+      </label>
     </div>
     <div class="hint" id="trackStatus">Manual mode — using the km point above. Load a GPS track to auto-fill her position and actual checkpoint splits.</div>
   </div>
@@ -300,7 +303,7 @@ const startEl=$("start"), mileEl=$("mile"), timeEl=$("time"),
 startEl.value = "2026-06-20T01:00";
 
 // Persist inputs — Safari discards background tabs, so restore on reopen.
-const SAVE_FIELDS=["start","mile","time","pmile","ptime","manual"];
+const SAVE_FIELDS=["start","mile","time","pmile","ptime","manual","feedUrl"];
 function save(){ try{ const o={}; SAVE_FIELDS.forEach(f=>o[f]=$(f).value);
   localStorage.setItem("whw",JSON.stringify(o)); }catch(e){} }
 function restore(){ try{ const o=JSON.parse(localStorage.getItem("whw")||"{}");
@@ -318,14 +321,24 @@ restoreHistory();
 function setHistory(pts){ RAW_HISTORY=(pts&&pts.length)?pts:null; persistHistory(); render(); }
 function loadTrack(){ const p=parseTrack($("track").value); if(!p){ alert("Couldn't read any GPS points. Paste Garmin trackPoints JSON, or rows of lat,lon,time."); return; } setHistory(p); }
 function clearTrack(){ $("track").value=""; setHistory(null); }
+// CORS-open relay (Cloudflare Worker) that fetches the Garmin LiveTrack page for us
+const PROXY="https://whw-garmin-proxy.evening-juravenator.workers.dev/?url=";
 async function fetchFeed(){
   const url=$("feedUrl").value.trim(); if(!url) return;
+  // a live.garmin.com session URL goes via the relay; anything else is fetched directly
+  const target=/^https:\/\/live\.garmin\.com\/session\//.test(url)? PROXY+encodeURIComponent(url) : url;
   $("trackStatus").textContent="Fetching…";
-  try{ const r=await fetch(url,{headers:{"Accept":"application/json"}});
+  try{ const r=await fetch(target,{cache:"no-store"});
     const txt=await r.text(); const p=parseTrack(txt);
-    if(!p){ $("trackStatus").textContent="Fetched, but found no GPS points in the response."; return; }
+    if(!p){ $("trackStatus").textContent="Fetched, but found no GPS points yet."; return; }
     setHistory(p);
-  }catch(e){ $("trackStatus").textContent="Fetch failed (likely CORS or offline): "+e.message; }
+  }catch(e){ $("trackStatus").textContent="Fetch failed: "+e.message; }
+}
+let autoTimer=null;
+function setAuto(){
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; }
+  if($("autoFetch").checked){ autoTimer=setInterval(fetchFeed,5*60000); fetchFeed(); }
+  try{ localStorage.setItem("whw_auto",$("autoFetch").checked?"1":""); }catch(e){}
 }
 // tolerant parser: Garmin {trackPoints:[{dateTime,position:{lat,lon}}]}, arrays, or CSV-ish rows
 function parseTrack(text){
@@ -561,9 +574,13 @@ function setNow(){
   $(id).addEventListener("input",()=>{ save(); render(); });
   $(id).addEventListener("change",()=>{ save(); render(); });
 });
+$("feedUrl").addEventListener("change",save);
+$("autoFetch").addEventListener("change",setAuto);
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) save(); });
 drawElevation(null);
 if(RAW_HISTORY || timeEl.value){ render(); } else { setNow(); }
+// resume auto-refresh if it was on
+try{ if(localStorage.getItem("whw_auto")){ $("autoFetch").checked=true; setAuto(); } }catch(e){}
 </script>
 </body>
 </html>
