@@ -577,14 +577,22 @@ function render(){
     const planH=planAtMile(last.mile,"slow")-planAtMile(a.mile,"slow");
     if((last.mile-a.mile)>0.3 && planH>0.05) recentR=((last.t-a.t)/3600000)/planH;
   }
-  // exact official form: her last SportIdent split vs the slow plan at that gate (best anchor)
-  let officialR=null;
-  if(OFFICIAL && OFFICIAL.elapsedH!=null){
-    let lastKm=null; CP.forEach(c=>{ if(c.mile!=null && OFFICIAL.byName[c.name]!=null) lastKm=c.mile; });
-    if(lastKm!=null){ const ps=planAtMile(lastKm,"slow"); if(ps>0.1) officialR=OFFICIAL.elapsedH/ps; }
+  // official anchor points (km, elapsedH) + recency-weighted segment pace vs slow plan.
+  // Weighting recent segments fixes the early-fresh-pace optimism; self-corrects each gate.
+  let offPts=null, R_forward=null;
+  if(OFFICIAL){
+    offPts=[[0,0]];
+    CP.forEach(c=>{ if(c.mile!=null && OFFICIAL.byName[c.name]!=null) offPts.push([c.mile,OFFICIAL.byName[c.name]]); });
+    offPts.sort((a,b)=>a[0]-b[0]);
+    let rsum=0,wsum=0;
+    for(let i=1;i<offPts.length;i++){
+      const dt=offPts[i][1]-offPts[i-1][1], dp=planAtMile(offPts[i][0],"slow")-planAtMile(offPts[i-1][0],"slow");
+      if(dp>0.05){ const w=i; rsum+=(dt/dp)*w; wsum+=w; }   // recent segments weigh more
+    }
+    if(wsum) R_forward=rsum/wsum;
   }
-  // prefer the exact official ratio; else whole-race 70% / recent 30%
-  let R = officialR!=null ? (recentR!=null? 0.8*officialR+0.2*recentR : officialR)
+  // forward ratio: recency-weighted official segments (best), nudged by live GPS recent
+  let R = R_forward!=null ? (recentR!=null? 0.75*R_forward+0.25*recentR : R_forward)
         : ((overallR!=null && recentR!=null) ? 0.7*overallR+0.3*recentR : (overallR!=null?overallR:recentR));
   if(R!=null) R=Math.max(0.4,Math.min(3,R));
   function projEtaH(km){
@@ -594,9 +602,22 @@ function render(){
   const canProject = R!=null || paceMinMi;
 
   // ---- recolour the elevation line by her status along the route ----
+  // passed sections use the EXACT official splits (interpolated) so the colour matches reality;
+  // the live segment bridges official→GPS; ahead uses the projection.
+  function offTimeAtKm(km){
+    if(!offPts || offPts.length<2) return null;
+    const last=offPts[offPts.length-1];
+    if(km<=last[0]){
+      for(let i=1;i<offPts.length;i++){ if(km<=offPts[i][0]){ const a=offPts[i-1],b=offPts[i],f=(km-a[0])/((b[0]-a[0])||1); return a[1]+f*(b[1]-a[1]); } }
+      return last[1];
+    }
+    if(live && mile>last[0]+0.01 && km<=mile){ const f=(km-last[0])/((mile-last[0])||1); return last[1]+f*(elapsedH-last[1]); }
+    return null;
+  }
   let timeAtKm=null;
   if(canProject){
     timeAtKm=(km)=>{
+      const ot=offTimeAtKm(km); if(ot!=null) return ot;
       if(live && series && km<=mile+0.001){ const cm=crossMs(series,km); if(cm!=null) return (cm-startMs())/3600000; }
       return projEtaH(km);
     };
