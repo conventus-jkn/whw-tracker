@@ -458,7 +458,11 @@ function render(){
   // ---- determine data source: live GPS history, or manual ----
   let mile, nowMs, series=null, live=false, crossings={}, paceMinMi=null, paceSrc=null;
   if(RAW_HISTORY && RAW_HISTORY.length){
-    series=snapSeries(RAW_HISTORY);
+    // ignore pings before the race start (GPS switched on early at the start line)
+    const s0=startMs();
+    let hist=RAW_HISTORY.filter(p=>p.t>=s0-1);
+    if(!hist.length) hist=RAW_HISTORY;          // fallback if nothing yet after start
+    series=snapSeries(hist);
     const lastP=series[series.length-1];
     mile=lastP.mile; nowMs=lastP.t; live=true;
     paceMinMi=recentPace(series); paceSrc="live GPS · recent";
